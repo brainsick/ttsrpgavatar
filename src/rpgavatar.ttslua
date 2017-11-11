@@ -1,0 +1,136 @@
+function math.sign(v)
+	return (v >= 0 and 1) or -1
+end
+
+function math.round(v, bracket)
+	bracket = bracket or 1
+	return math.floor(v/bracket + math.sign(v) * 0.5) * bracket
+end
+
+function playerLookAt(player, position, yaw)
+	return player.lookAt({
+		position = position,
+		pitch = 22.5,
+		yaw = yaw,
+		distance = 2
+	})
+end
+
+function onScriptingButtonDown(index, player_color)
+	if player_color == 'Grey' then return end
+	if not canControl(player_color) then return end
+	local player = Player[player_color]
+	processPlayerInput(player, index)
+end
+
+function normalizeColor(color)
+	return {
+		r = math.round(color.r * 255, 255),
+		g = math.round(color.g * 255, 255),
+		b = math.round(color.b * 255, 255)
+	}
+end
+
+function canControl(player_color)
+	local playerColor = stringColorToRGB(player_color)
+	local colorTint = self.getColorTint()
+
+	local a = normalizeColor(colorTint)
+	local b = normalizeColor(playerColor)
+
+	if a.r == b.r and	a.g == b.g and a.b == b.b then
+		return true
+	end
+end
+
+function processPlayerInput(player, keyPressed)
+	local forthKey, rightKey, backKey, leftKey = 8, 6, 5, 4
+	local turnRightKey, turnLeftKey = 9, 7
+	local attackKey = 1
+
+	if keyPressed == attackKey then
+		self.RPGFigurine.attack()
+	end
+
+	local distance = 1
+	local degrees = 22.5
+
+	local directionTransform = nil
+	local rotationTransform = nil
+
+	if keyPressed == forthKey then
+		local ft = self.getTransformForward()
+		directionTransform = { x = ft.x, y = ft.y, z = ft.z }
+	elseif keyPressed == rightKey then
+		local rt = self.getTransformRight()
+		directionTransform = { x = rt.x, y = rt.y, z = rt.z }
+	elseif keyPressed == backKey then
+		local ft = self.getTransformForward()
+		directionTransform = { x = ft.x * -1, y = ft.y * -1, z = ft.z * -1 }
+	elseif keyPressed == leftKey then
+		local rt = self.getTransformRight()
+		directionTransform = { x = rt.x * -1, y = rt.y * -1, z = rt.z * -1 }
+	elseif keyPressed == turnRightKey then
+		rotationTransform = { x = 0, y = 1, z = 0 }
+	elseif keyPressed == turnLeftKey then
+		rotationTransform = { x = 0, y = -1, z = 0 }
+	end
+
+	local targetPosition = self.getPosition()
+	local targetRotation = self.getRotation()
+
+	if rotationTransform ~= nil then
+		targetRotation = {
+			x = (targetRotation.x + rotationTransform.x * degrees) % 360,
+			y = (targetRotation.y + rotationTransform.y * degrees) % 360,
+			z = (targetRotation.z + rotationTransform.z * degrees) % 360
+		}
+	end
+
+	if directionTransform ~= nil then
+		if not isPathObstructed(directionTransform, distance) then
+			targetPosition = {
+				x = targetPosition.x + directionTransform.x * distance,
+				y = targetPosition.y + directionTransform.y * distance,
+				z = targetPosition.z + directionTransform.z * distance
+			}
+		end
+	end
+
+	self.setPositionSmooth(targetPosition)
+	self.setRotationSmooth(targetRotation)
+
+	playerLookAt(player, targetPosition, targetRotation.y)
+end
+
+function isPathObstructed(direction, distance)
+	local origin = self.getBounds().center
+
+	local bounds = self.getBoundsNormalized()
+	local sizeScale = 0.8
+	local size = {
+		x = bounds.size.x * sizeScale,
+		y = bounds.size.y * sizeScale,
+		z = bounds.size.z * sizeScale
+	}
+
+	local orientation = self.getRotation()
+
+	local result = Physics.cast({
+		origin = origin,
+		direction = direction,
+		type = 3,
+		size = size,
+		orientation = orientation,
+		max_distance = distance
+	})
+
+	local foundHit = false
+	for index, hit in ipairs(result) do
+		if self ~= hit.hit_object then
+			foundHit = true
+		end
+	end
+
+	return foundHit
+end
