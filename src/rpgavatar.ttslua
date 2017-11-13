@@ -1,3 +1,6 @@
+-- RPG Avatar by Todd Ross
+-- http://steamcommunity.com/sharedfiles/filedetails/?id=1197576118
+
 function math.sign(v)
 	return (v >= 0 and 1) or -1
 end
@@ -7,40 +10,95 @@ function math.round(v, bracket)
 	return math.floor(v/bracket + math.sign(v) * 0.5) * bracket
 end
 
-function playerLookAt(player, position, yaw)
-	return player.lookAt({
-		position = position,
-		pitch = 22.5,
-		yaw = yaw,
-		distance = 2
-	})
-end
-
-function onScriptingButtonDown(index, player_color)
-	if player_color == 'Grey' then return end
-	if not canControl(player_color) then return end
-	local player = Player[player_color]
-	processPlayerInput(player, index)
-end
-
-function normalizeColor(color)
+function colorToRGBA(color)
 	return {
-		r = math.round(color.r * 255, 255),
-		g = math.round(color.g * 255, 255),
-		b = math.round(color.b * 255, 255)
+		r = math.round(color.r * 255),
+		g = math.round(color.g * 255),
+		b = math.round(color.b * 255),
+		a = math.round((color.a or 1) * 255)
 	}
 end
 
-function canControl(player_color)
-	local playerColor = stringColorToRGB(player_color)
-	local colorTint = self.getColorTint()
-
-	local a = normalizeColor(colorTint)
-	local b = normalizeColor(playerColor)
-
-	if a.r == b.r and	a.g == b.g and a.b == b.b then
-		return true
+-- we need a margin here because TTS isn't consistent on what color Red is
+-- http://www.berserk-games.com/forums/showthread.php?4739-Possible-Bug-In-Color-Handling
+function compareRGBAColors(a, b, margin)
+	if not margin or margin == 0 then
+		if a.r == b.r and	a.g == b.g and a.b == b.b and a.a == b.a then
+			return true
+		end
+	else
+		local withinR = (a.r >= b.r - margin and a.r <= b.r + margin)
+		local withinG = (a.g >= b.g - margin and a.g <= b.g + margin)
+		local withinB = (a.b >= b.b - margin and a.b <= b.b + margin)
+		local withinA = (a.a >= b.a - margin and a.a <= b.a + margin)
+		if withinR and withinG and withinB and withinA then
+			return true
+		end
 	end
+	return false
+end
+
+function onUpdate()
+	processPlayerInputMetered()
+end
+
+-- track the 10 keys that can be scripted
+local depressedKeys = { false, false, false, false, false, false, false, false, false, false }
+
+local lastPlayerInputTime = os.time()
+function processPlayerInputMetered()
+	local now = os.time()
+	local deltaTime = now - lastPlayerInputTime
+
+	if deltaTime > 0.2 then
+		local player = getControllingPlayer()
+		local key = getDepressedKey()
+
+		if player and key and canMove() then
+			processPlayerInput(player, key)
+			lastPlayerInputTime = now
+		end
+	end
+end
+
+function getControllingPlayer()
+	for index, player in ipairs(Player.getPlayers()) do
+		if canControl(player.color) then
+			return player
+		end
+	end
+	return nil
+end
+
+function canControl(player_color)
+	local playerRGB = colorToRGBA(stringColorToRGB(player_color))
+	local selfTintRGB = colorToRGBA(self.getColorTint())
+	return compareRGBAColors(playerRGB, selfTintRGB, 1)
+end
+
+function getDepressedKey()
+	for index, value in ipairs(depressedKeys) do
+		if value then return index end
+	end
+	return nil
+end
+
+function onScriptingButtonDown(index, player_color)
+	if not canControl(player_color) then return end
+	depressedKeys[index] = true
+end
+
+function onScriptingButtonUp(index, player_color)
+	if not canControl(player_color) then return end
+	depressedKeys[index] = false
+end
+
+function canMove()
+	if self.getLock() then return false end
+	if self.held_by_color then return false end
+	if not self.resting then return false end
+
+	return true
 end
 
 function processPlayerInput(player, keyPressed)
@@ -133,4 +191,13 @@ function isPathObstructed(direction, distance)
 	end
 
 	return foundHit
+end
+
+function playerLookAt(player, position, yaw)
+	return player.lookAt({
+		position = position,
+		pitch = 22.5,
+		yaw = yaw,
+		distance = 2
+	})
 end
