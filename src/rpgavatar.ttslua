@@ -110,7 +110,7 @@ function processPlayerInput(player, keyPressed)
 		self.RPGFigurine.attack()
 	end
 
-	local distance = 1
+	local distance = 2
 	local degrees = 22.5
 
 	local directionTransform = nil
@@ -155,7 +155,7 @@ function processPlayerInput(player, keyPressed)
 		end
 	end
 
-	self.setPositionSmooth(targetPosition)
+	self.setPositionSmooth(targetPosition, false, true)
 	self.setRotationSmooth(targetRotation)
 
 	playerLookAt(player, targetPosition, targetRotation.y)
